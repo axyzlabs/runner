@@ -1,0 +1,88 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+dist/
+build/
+
+# Test artifacts
+*.test
+*.out
+coverage.out
+coverage*.out
+test-events/
+artifacts/
+
+# Go
+vendor/
+
+# Documentation (will be copied explicitly if needed)
+docs/validation/
+*.md.backup
+
+# Secrets and local config
+.secrets
+.secrets.*
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Cache
+.cache/
+*.cache
+
+# Git worktrees
+worktrees/
+*.worktree
+
+# Act artifacts
+.actrc.local

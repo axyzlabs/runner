@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # GitHub Actions Runner with Claude Code
+  gha-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+      args:
+        - GO_VERSION=1.25.0
+        - NODE_VERSION=20
+        - PYTHON_VERSION=3.11
+    image: zeeke-ai-runner:latest
+    container_name: zeeke-ai-runner
+
+    # Run as claude user
+    user: claude
+
+    # Environment variables
+    environment:
+      # GitHub
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-dahendel/zeeke-ai}
+      - GITHUB_WORKSPACE=/home/claude/workspace
+
+      # Anthropic
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Git configuration
+      - GIT_USER_NAME=${GIT_USER_NAME:-Claude Code Runner}
+      - GIT_USER_EMAIL=${GIT_USER_EMAIL:-claude@zeeke-ai.local}
+
+      # Runner configuration
+      - RUN_PREFLIGHT=${RUN_PREFLIGHT:-true}
+      - RUNNER_ALLOW_RUNASROOT=0
+
+      # Skill Seekers path (if mounted)
+      - SKILL_SEEKERS_PATH=${SKILL_SEEKERS_PATH:-/mcp/skill-seekers}
+
+      # Go configuration
+      - GOPATH=/go
+      - GOBIN=/go/bin
+      - GO111MODULE=on
+      - CGO_ENABLED=0
+
+      # Python configuration
+      - PYTHONUNBUFFERED=1
+      - PIP_NO_CACHE_DIR=1
+
+    # Volumes
+    volumes:
+      # Mount project workspace (read/write)
+      - ./:/home/claude/workspace:rw
+
+      # Mount Go cache for faster builds
+      - go-cache:/go/pkg/mod
+      - go-build-cache:/home/claude/.cache/go-build
+
+      # Mount Docker socket for act (if needed)
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Mount user-level agents (read-only)
+      - ${HOME}/.claude/agents:/home/claude/.claude/agents:ro
+
+      # Mount Skill_Seekers MCP server (if available, read-only)
+      - ${SKILL_SEEKERS_PATH:-./mcp/skill-seekers}:/mcp/skill-seekers:ro
+
+      # Mount secrets file (read-only)
+      - ./.secrets:/home/claude/.secrets:ro
+
+    # Working directory
+    working_dir: /home/claude/workspace
+
+    # Command (interactive shell by default)
+    command: bash
+
+    # Keep container running
+    stdin_open: true
+    tty: true
+
+    # Network
+    network_mode: bridge
+
+    # Resource limits (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "claude", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: act runner for workflow testing
+  act-runner:
+    image: zeeke-ai-runner:latest
+    container_name: zeeke-ai-act-runner
+    user: claude
+
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+    volumes:
+      - ./:/home/claude/workspace:rw
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.secrets:/home/claude/.secrets:ro
+      - act-cache:/home/claude/.cache/act
+
+    working_dir: /home/claude/workspace
+
+    # Run act by default
+    command: act -l
+
+    profiles:
+      - testing
+
+# Volumes
+volumes:
+  go-cache:
+    driver: local
+  go-build-cache:
+    driver: local
+  act-cache:
+    driver: local
+
+# Networks
+networks:
+  default:
+    driver: bridge
