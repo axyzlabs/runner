@@ -141,10 +141,16 @@ RUN if [ -f "go.mod" ]; then \
         go mod download; \
     fi
 
+# Switch to root to install Go tools (need write access to /go)
+USER root
+
 # Install project-specific Go tools
 RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && \
     go install golang.org/x/tools/cmd/goimports@latest && \
     go install honnef.co/go/tools/cmd/staticcheck@latest
+
+# Switch back to claude user
+USER ${CLAUDE_USER}
 
 # Set up Git config
 RUN git config --global user.name "Claude Code Runner" && \
