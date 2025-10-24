@@ -81,10 +81,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - && \
     rm -rf /var/lib/apt/lists/*
 
 # Install actionlint for workflow validation
-RUN wget -q https://github.com/rhysd/actionlint/releases/latest/download/actionlint_linux_amd64.tar.gz && \
-    tar -xzf actionlint_linux_amd64.tar.gz -C /usr/local/bin && \
-    chmod +x /usr/local/bin/actionlint && \
-    rm actionlint_linux_amd64.tar.gz
+# Using curl with -L to follow redirects (wget -q doesn't handle GitHub redirects well)
+RUN curl -sSL https://github.com/rhysd/actionlint/releases/latest/download/actionlint_linux_amd64.tar.gz | \
+    tar -xz -C /usr/local/bin && \
+    chmod +x /usr/local/bin/actionlint
 
 # Install act (for local workflow testing)
 RUN curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | bash -s -- -b /usr/local/bin
