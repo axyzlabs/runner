@@ -91,13 +91,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     apt-get install -y gh && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI with retry logic for transient network failures
-RUN for i in 1 2 3; do \
-        echo "Attempt $i: Installing Claude Code CLI..." && \
-        curl -fsSL https://install.claude.ai | sh && break || \
-        { echo "Failed, retrying in 5 seconds..."; sleep 5; }; \
-    done && \
-    claude --version || { echo "Claude CLI installation failed after 3 attempts"; exit 1; }
+# Install Claude Code CLI via npm (more reliable than install script)
+RUN npm install -g @anthropic-ai/claude-code && \
+    claude --version
 
 # Create claude user with sudo access
 RUN useradd -m -s /bin/bash -u 1001 ${CLAUDE_USER} && \
