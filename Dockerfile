@@ -46,8 +46,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     make \
-    # Python and pip
-    python3=${PYTHON_VERSION}* \
+    # Python and pip (use whatever python3 version is available)
+    python3 \
     python3-pip \
     python3-venv \
     # Docker CLI (for act and testing)
