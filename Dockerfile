@@ -36,7 +36,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     vim \
     jq \
-    yq \
     ca-certificates \
     gnupg \
     lsb-release \
@@ -57,6 +56,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     rsync \
     && rm -rf /var/lib/apt/lists/*
+
+# Install yq separately (not available in apt for this distro)
+RUN wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && \
+    chmod +x /usr/local/bin/yq
 
 # Install Go
 RUN wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
