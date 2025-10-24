@@ -154,7 +154,7 @@ RUN git config --global user.name "Claude Code Runner" && \
     git config --global init.defaultBranch main
 
 # Copy entrypoint script
-COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} docker/entrypoint.sh /entrypoint.sh
+COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} entrypoint.sh /entrypoint.sh
 USER root
 RUN chmod +x /entrypoint.sh
 USER ${CLAUDE_USER}

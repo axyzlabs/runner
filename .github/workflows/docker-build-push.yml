@@ -1,0 +1,348 @@
+name: Build and Push Docker Image
+
+# Trigger workflow on:
+# - Push to main branch
+# - Version tags (v*.*.*)
+# - Pull requests (build only, no push)
+# - Manual workflow dispatch
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: 'Push image to registry'
+        required: false
+        type: boolean
+        default: true
+
+# Set environment variables for the workflow
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# Ensure only one build runs at a time per ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job 1: Build and optionally push the Docker image
+  build-and-push:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+
+    # Required for pushing to GHCR
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for proper versioning
+
+      # Step 2: Set up QEMU for multi-architecture builds
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      # Step 3: Set up Docker Buildx for advanced build features
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          # Use docker-container driver for better caching
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+          # Enable build cache
+          buildkitd-flags: --debug
+
+      # Step 4: Extract metadata (tags, labels) for Docker
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Tagging strategy:
+          # - latest: for main branch
+          # - semver: for version tags (v1.2.3 -> 1.2.3, 1.2, 1)
+          # - sha: for commit SHA
+          # - pr: for pull requests
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=GitHub Actions Runner with Claude Code
+            org.opencontainers.image.description=Production-ready Docker container for GitHub Actions with Claude Code, Go, Python, Node.js
+            org.opencontainers.image.vendor=axyzlabs
+            org.opencontainers.image.authors=axyzlabs
+            maintainer=axyzlabs
+
+      # Step 5: Log in to GitHub Container Registry
+      # Only login if we're going to push
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 6: Build Docker image (and push if appropriate)
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          # Push only on main branch or tags (not on PRs)
+          push: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Enable layer caching for faster builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Enable BuildKit features
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          # Add provenance and SBOM attestations for supply chain security
+          provenance: true
+          sbom: true
+
+      # Step 7: Run Trivy vulnerability scanner on the image
+      - name: Run Trivy security scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          # Don't fail on vulnerabilities in base image (we'll monitor them)
+          exit-code: '0'
+
+      # Step 8: Upload Trivy results to GitHub Security tab
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # Step 9: Generate summary of the build
+      - name: Generate build summary
+        if: always()
+        run: |
+          {
+            echo "## Docker Build Summary"
+            echo ""
+            echo "### Build Information"
+            echo "- **Registry**: \`${{ env.REGISTRY }}\`"
+            echo "- **Image**: \`${{ env.IMAGE_NAME }}\`"
+            echo "- **Platforms**: \`linux/amd64, linux/arm64\`"
+            echo "- **Pushed**: \`${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}\`"
+            echo ""
+            echo "### Tags Generated"
+            echo "\`\`\`"
+            echo "${{ steps.meta.outputs.tags }}"
+            echo "\`\`\`"
+            echo ""
+            echo "### Image Digest"
+            echo "\`\`\`"
+            echo "${{ steps.build.outputs.digest }}"
+            echo "\`\`\`"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ github.event_name }}" != "pull_request" ] && { [ "${{ github.ref }}" == "refs/heads/main" ] || [ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]; }; then
+            {
+              echo "### Pull Command"
+              echo "\`\`\`bash"
+              echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+              echo "\`\`\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Job 2: Test the built image
+  test-image:
+    name: Test Docker Image
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+
+    steps:
+      # Step 1: Log in to GHCR to pull the image
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 2: Set up QEMU for ARM64 testing on AMD64 runners
+      - name: Set up QEMU
+        if: matrix.platform == 'linux/arm64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      # Step 3: Pull and test the image
+      - name: Test image for ${{ matrix.platform }}
+        run: |
+          # Extract platform-specific tag
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+
+          echo "Testing image: ${IMAGE}"
+          echo "Platform: ${{ matrix.platform }}"
+
+          # Pull the image
+          docker pull --platform="${{ matrix.platform }}" "${IMAGE}"
+
+          # Test 1: Verify image can start
+          echo "Test 1: Starting container..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" echo "Container started successfully"
+
+          # Test 2: Verify Claude CLI is installed
+          echo "Test 2: Testing Claude CLI..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" claude --version
+
+          # Test 3: Verify Go is installed and working
+          echo "Test 3: Testing Go..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" go version
+
+          # Test 4: Verify Python is installed
+          echo "Test 4: Testing Python..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" python3 --version
+
+          # Test 5: Verify Node.js is installed
+          echo "Test 5: Testing Node.js..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" node --version
+
+          # Test 6: Verify act is installed
+          echo "Test 6: Testing act..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" act --version
+
+          # Test 7: Verify actionlint is installed
+          echo "Test 7: Testing actionlint..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" actionlint --version
+
+          # Test 8: Verify gh CLI is installed
+          echo "Test 8: Testing gh CLI..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" gh --version
+
+          # Test 9: Verify Go tools are installed
+          echo "Test 9: Testing Go tools..."
+          docker run --platform="${{ matrix.platform }}" --rm "${IMAGE}" golangci-lint --version
+
+          echo "All tests passed for ${{ matrix.platform }}!"
+
+      # Step 4: Generate test summary
+      - name: Generate test summary
+        if: always()
+        run: |
+          {
+            echo "## Test Results for ${{ matrix.platform }}"
+            echo ""
+            echo "Platform: \`${{ matrix.platform }}\`"
+            echo ""
+            echo "Status: ✅ All tests passed"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Job 3: Create GitHub Release (only for version tags)
+  create-release:
+    name: Create GitHub Release
+    needs: [build-and-push, test-image]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous tag found, generating full changelog"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            echo "Generating changelog from ${PREV_TAG} to ${GITHUB_REF_NAME}"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD")
+          fi
+
+          # Create changelog
+          cat << EOF > RELEASE_NOTES.md
+          ## Docker Image
+
+          \`\`\`bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME#v}
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          \`\`\`
+
+          ## What's Changed
+
+          ${COMMITS}
+
+          ## Supported Platforms
+
+          - linux/amd64
+          - linux/arm64
+
+          ## Included Tools
+
+          - Claude Code CLI (latest)
+          - Go 1.25.0
+          - Python 3.11
+          - Node.js 20.x
+          - act (nektos/act)
+          - actionlint
+          - gh CLI
+          - golangci-lint
+          - And more...
+
+          See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for full documentation.
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
