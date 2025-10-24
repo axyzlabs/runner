@@ -75,9 +75,9 @@ ENV PATH="/usr/local/go/bin:${PATH}" \
 COPY --from=go-builder /go/bin/* /go/bin/
 
 # Install Node.js and npm (for GitHub Actions scripts)
+# Note: Using the npm version that comes with Node.js to avoid compatibility issues
 RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - && \
     apt-get install -y nodejs && \
-    npm install -g npm@latest && \
     rm -rf /var/lib/apt/lists/*
 
 # Install actionlint for workflow validation
