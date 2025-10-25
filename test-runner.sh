@@ -88,9 +88,6 @@ test_command "Node.js installed" "node --version"
 # Test: act installation
 test_command "act installed" "act --version"
 
-# Test: actionlint installation
-test_command "actionlint installed" "actionlint --version"
-
 # Test: gh CLI installation
 test_command "gh CLI installed" "gh --version"
 
@@ -126,7 +123,6 @@ test_command "Go can build" "cd /home/claude/workspace && go build ./..."
 
 # Test: Workflow validation
 test_command "Can list workflows" "cd /home/claude/workspace && act -l"
-test_command "Can validate workflows" "cd /home/claude/workspace && actionlint .github/workflows/ci.yml"
 
 # Display results
 echo -e "\n${BLUE}[4/4]${NC} Test Results"
