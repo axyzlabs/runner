@@ -93,7 +93,8 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
 
 # Install Claude Code CLI via npm (more reliable than install script)
 RUN npm install -g @anthropic-ai/claude-code && \
-    claude --version
+    claude --version && \
+    npm cache clean --force
 
 # Create claude user with sudo access
 RUN useradd -m -s /bin/bash -u 1001 ${CLAUDE_USER} && \
@@ -107,10 +108,26 @@ RUN useradd -m -s /bin/bash -u 1001 ${CLAUDE_USER} && \
 USER ${CLAUDE_USER}
 WORKDIR ${CLAUDE_HOME}
 
-# Create Claude directories
+# Create Claude directories with proper permissions
 RUN mkdir -p ${CLAUDE_HOME}/.claude/agents && \
     mkdir -p ${CLAUDE_HOME}/.claude/skills && \
-    mkdir -p ${CLAUDE_HOME}/.config/claude
+    mkdir -p ${CLAUDE_HOME}/.claude/checkpoints && \
+    mkdir -p ${CLAUDE_HOME}/.config/claude && \
+    chmod 700 ${CLAUDE_HOME}/.claude/checkpoints
+
+# Copy Claude configuration files
+COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} .claude/config/.mcp.json ${CLAUDE_HOME}/.claude/.mcp.json
+COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} .claude/config/config.json ${CLAUDE_HOME}/.config/claude/config.json
+
+# Copy project-agnostic skills
+COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} .claude/skills/*.md ${CLAUDE_HOME}/.claude/skills/
+
+# Install Python MCP dependencies
+COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} requirements.txt /tmp/requirements.txt
+RUN python3 -m pip install --user --upgrade pip setuptools wheel && \
+    python3 -m pip install --user -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt && \
+    rm -rf ~/.cache/pip
 
 # Set up project workspace
 WORKDIR ${CLAUDE_HOME}/workspace
@@ -118,25 +135,16 @@ WORKDIR ${CLAUDE_HOME}/workspace
 # Copy project files (this will be mounted in runtime, but we set defaults)
 COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} . ${CLAUDE_HOME}/workspace/
 
-# Copy project-level agents and skills
+# Copy project-level agents and skills if they exist
 RUN if [ -d "${CLAUDE_HOME}/workspace/.github/agent-specs" ]; then \
         mkdir -p ${CLAUDE_HOME}/.claude/agents/project-agents && \
         cp -r ${CLAUDE_HOME}/workspace/.github/agent-specs/* ${CLAUDE_HOME}/.claude/agents/project-agents/; \
     fi && \
-    if [ -d "${CLAUDE_HOME}/workspace/.claude/skills" ]; then \
-        cp -r ${CLAUDE_HOME}/workspace/.claude/skills/* ${CLAUDE_HOME}/.claude/skills/; \
+    if [ -d "${CLAUDE_HOME}/workspace/.claude/skills" ] && [ "$(ls -A ${CLAUDE_HOME}/workspace/.claude/skills 2>/dev/null)" ]; then \
+        cp -r ${CLAUDE_HOME}/workspace/.claude/skills/* ${CLAUDE_HOME}/.claude/skills/ || true; \
     fi
 
-# Set up MCP configuration
-RUN if [ -f "${CLAUDE_HOME}/workspace/.claude/.mcp.json" ]; then \
-        cp ${CLAUDE_HOME}/workspace/.claude/.mcp.json ${CLAUDE_HOME}/.claude/.mcp.json; \
-    fi
-
-# Install Python MCP dependencies
-RUN python3 -m pip install --user --upgrade pip setuptools wheel && \
-    python3 -m pip install --user mcp anthropic
-
-# Download Go dependencies
+# Download Go dependencies if go.mod exists
 RUN if [ -f "go.mod" ]; then \
         go mod download; \
     fi
@@ -163,9 +171,9 @@ USER root
 RUN chmod +x /entrypoint.sh
 USER ${CLAUDE_USER}
 
-# Health check
+# Health check - verify Claude CLI, Go, Python, and MCP config
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD claude --version && go version && python3 --version || exit 1
+    CMD claude --version && go version && python3 --version && test -f ${CLAUDE_HOME}/.claude/.mcp.json || exit 1
 
 # Environment variables for runtime
 ENV PATH="${CLAUDE_HOME}/.local/bin:${GOBIN}:${PATH}" \

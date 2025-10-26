@@ -1,0 +1,16 @@
+{
+  "checkpoint": {
+    "auto": false,
+    "threshold": 0.7,
+    "checkpointDir": "/home/claude/.claude/checkpoints",
+    "maxCheckpoints": 10,
+    "compressionEnabled": true
+  },
+  "context": {
+    "warningThreshold": 0.7,
+    "maxTokens": 200000
+  },
+  "metrics": {
+    "enabled": false
+  }
+}

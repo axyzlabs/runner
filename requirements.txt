@@ -1,0 +1,13 @@
+# Python MCP Dependencies for GitHub Actions Runner
+# These packages enable MCP server functionality for Claude Code integration
+
+# Core MCP SDK
+mcp>=0.1.0
+
+# Anthropic Python SDK (for MCP server compatibility)
+anthropic>=0.40.0
+
+# Additional utilities for MCP servers
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+httpx>=0.25.0

@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "aws-docs": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-aws-kb"],
+      "disabled": false,
+      "env": {
+        "AWS_REGION": "us-east-1"
+      }
+    },
+    "terraform": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-terraform"],
+      "disabled": false,
+      "env": {
+        "TF_LOG": "ERROR"
+      }
+    }
+  }
+}

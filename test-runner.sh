@@ -73,6 +73,7 @@ echo -e "${GREEN}✓${NC} Container started"
 # Run tests
 echo -e "${BLUE}[3/4]${NC} Running tests..."
 
+echo -e "\n${YELLOW}Core Tools:${NC}"
 # Test: Claude Code installation
 test_command "Claude Code installed" "claude --version"
 
@@ -91,36 +92,73 @@ test_command "act installed" "act --version"
 # Test: gh CLI installation
 test_command "gh CLI installed" "gh --version"
 
+echo -e "\n${YELLOW}Go Tools:${NC}"
 # Test: Go tools
 test_command "golangci-lint installed" "golangci-lint --version"
 test_command "staticcheck installed" "staticcheck -version"
 test_command "goimports installed" "goimports --help"
 
+echo -e "\n${YELLOW}Utilities:${NC}"
 # Test: Utilities
 test_command "jq installed" "jq --version"
 test_command "yq installed" "yq --version"
 test_command "git installed" "git --version"
 
+echo -e "\n${YELLOW}User & Permissions:${NC}"
 # Test: User and permissions
 test_command "Running as claude user" "[ \$(whoami) = 'claude' ]"
 test_command "Home directory exists" "[ -d /home/claude ]"
 test_command "Workspace mounted" "[ -d /home/claude/workspace ]"
 
-# Test: Claude configuration
+echo -e "\n${YELLOW}Claude Code Configuration:${NC}"
+# Test: Claude configuration directories
 test_command "Claude agents directory exists" "[ -d ~/.claude/agents ]"
 test_command "Claude skills directory exists" "[ -d ~/.claude/skills ]"
-test_command "MCP config exists" "[ -f ~/.claude/.mcp.json ]"
+test_command "Claude checkpoints directory exists" "[ -d ~/.claude/checkpoints ]"
 
+# Test: Claude configuration files
+test_command "MCP config exists" "[ -f ~/.claude/.mcp.json ]"
+test_command "MCP config is valid JSON" "jq empty ~/.claude/.mcp.json"
+test_command "Claude config exists" "[ -f ~/.config/claude/config.json ]"
+test_command "Claude config is valid JSON" "jq empty ~/.config/claude/config.json"
+
+# Test: MCP configuration content
+test_command "MCP servers configured" "jq '.mcpServers | length > 0' ~/.claude/.mcp.json | grep -q true"
+test_command "AWS docs server configured" "jq '.mcpServers | has(\"aws-docs\")' ~/.claude/.mcp.json | grep -q true"
+test_command "Terraform server configured" "jq '.mcpServers | has(\"terraform\")' ~/.claude/.mcp.json | grep -q true"
+
+# Test: Checkpoint configuration
+test_command "Auto-checkpoint disabled" "jq '.checkpoint.auto' ~/.config/claude/config.json | grep -q false"
+test_command "Checkpoint threshold set" "jq '.checkpoint.threshold' ~/.config/claude/config.json | grep -q 0.7"
+test_command "Checkpoint directory configured" "jq -r '.checkpoint.checkpointDir' ~/.config/claude/config.json | grep -q /home/claude/.claude/checkpoints"
+test_command "Checkpoint directory permissions" "[ \$(stat -c '%a' ~/.claude/checkpoints) = '700' ]"
+
+echo -e "\n${YELLOW}Skills:${NC}"
+# Test: Skills
+test_command "Skills directory has content" "[ \$(find ~/.claude/skills -maxdepth 1 -type f -name '*.md' | wc -l) -ge 2 ]"
+test_command "AWS docs skill exists" "[ -f ~/.claude/skills/aws-docs.md ]"
+test_command "Terraform docs skill exists" "[ -f ~/.claude/skills/terraform-docs.md ]"
+
+echo -e "\n${YELLOW}Python MCP Dependencies:${NC}"
+# Test: Python MCP packages
+test_command "Python MCP package installed" "python3 -c 'import mcp'"
+test_command "Anthropic SDK installed" "python3 -c 'import anthropic'"
+test_command "Python dotenv installed" "python3 -c 'import dotenv'"
+test_command "Python pydantic installed" "python3 -c 'import pydantic'"
+
+echo -e "\n${YELLOW}Project Files:${NC}"
 # Test: Project files
 test_command "Project CLAUDE.md accessible" "[ -f /home/claude/workspace/CLAUDE.md ]"
 test_command "Go modules accessible" "[ -f /home/claude/workspace/go.mod ]"
 test_command "Workflows accessible" "[ -d /home/claude/workspace/.github/workflows ]"
 
+echo -e "\n${YELLOW}Go Environment:${NC}"
 # Test: Go environment
 test_command "GOPATH set" "[ -n \"\$GOPATH\" ]"
 test_command "GOBIN set" "[ -n \"\$GOBIN\" ]"
 test_command "Go can build" "cd /home/claude/workspace && go build ./..."
 
+echo -e "\n${YELLOW}Workflow Validation:${NC}"
 # Test: Workflow validation
 test_command "Can list workflows" "cd /home/claude/workspace && act -l"
 
