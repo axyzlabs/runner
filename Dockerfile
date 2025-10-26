@@ -64,7 +64,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Additional utilities
     openssh-client \
     rsync \
-    && apt-get remove -y sudo \
+    && export SUDO_FORCE_REMOVE=yes && apt-get remove -y sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install jq (pinned version)
