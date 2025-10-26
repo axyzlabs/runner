@@ -27,6 +27,17 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CLAUDE_HOME=/home/claude \
     RUNNER_ALLOW_RUNASROOT=1
 
+# DevOps tool versions
+ENV AWS_CLI_VERSION=2.15.17 \
+    TERRAFORM_VERSION=1.7.3 \
+    TFLINT_VERSION=0.50.3 \
+    KUBECTL_VERSION=1.29.2 \
+    HELM_VERSION=3.14.2 \
+    K9S_VERSION=0.32.4 \
+    DOCKER_COMPOSE_VERSION=2.24.6 \
+    YQ_VERSION=4.42.1 \
+    JQ_VERSION=1.7.1
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Core tools
@@ -35,7 +46,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     unzip \
     vim \
-    jq \
     ca-certificates \
     gnupg \
     lsb-release \
@@ -57,9 +67,75 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rsync \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yq separately (not available in apt for this distro)
-RUN wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && \
-    chmod +x /usr/local/bin/yq
+# Install jq (pinned version)
+RUN wget -qO /usr/local/bin/jq \
+    "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-amd64" && \
+    chmod +x /usr/local/bin/jq && \
+    jq --version
+
+# Install yq (pinned version)
+RUN wget -qO /usr/local/bin/yq \
+    "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" && \
+    chmod +x /usr/local/bin/yq && \
+    yq --version
+
+# Install AWS CLI v2 (pinned version)
+RUN cd /tmp && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" -o "awscliv2.zip" && \
+    unzip -q awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws && \
+    aws --version
+
+# Install Terraform (pinned version)
+RUN cd /tmp && \
+    wget -q "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
+    unzip -q "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
+    mv terraform /usr/local/bin/ && \
+    chmod +x /usr/local/bin/terraform && \
+    rm "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
+    terraform version
+
+# Install tflint (pinned version)
+RUN cd /tmp && \
+    wget -q "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_amd64.zip" && \
+    unzip -q tflint_linux_amd64.zip && \
+    mv tflint /usr/local/bin/ && \
+    chmod +x /usr/local/bin/tflint && \
+    rm tflint_linux_amd64.zip && \
+    tflint --version
+
+# Install kubectl (pinned version)
+RUN cd /tmp && \
+    wget -q "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/ && \
+    kubectl version --client=true
+
+# Install Helm (pinned version)
+RUN cd /tmp && \
+    wget -q "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" && \
+    tar -xzf "helm-v${HELM_VERSION}-linux-amd64.tar.gz" && \
+    mv linux-amd64/helm /usr/local/bin/ && \
+    chmod +x /usr/local/bin/helm && \
+    rm -rf "helm-v${HELM_VERSION}-linux-amd64.tar.gz" linux-amd64 && \
+    helm version
+
+# Install k9s (pinned version)
+RUN cd /tmp && \
+    wget -q "https://github.com/derailed/k9s/releases/download/v${K9S_VERSION}/k9s_Linux_amd64.tar.gz" && \
+    tar -xzf k9s_Linux_amd64.tar.gz && \
+    mv k9s /usr/local/bin/ && \
+    chmod +x /usr/local/bin/k9s && \
+    rm k9s_Linux_amd64.tar.gz && \
+    k9s version
+
+# Install Docker Compose (pinned version)
+RUN cd /tmp && \
+    wget -q "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64" && \
+    mv docker-compose-linux-x86_64 /usr/local/bin/docker-compose && \
+    chmod +x /usr/local/bin/docker-compose && \
+    docker-compose version
 
 # Install Go
 RUN wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
@@ -148,6 +224,10 @@ USER root
 RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && \
     go install golang.org/x/tools/cmd/goimports@latest && \
     go install honnef.co/go/tools/cmd/staticcheck@latest
+
+# Copy version check script
+COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} scripts/version-check.sh /usr/local/bin/version-check
+RUN chmod +x /usr/local/bin/version-check
 
 # Switch back to claude user
 USER ${CLAUDE_USER}

@@ -1,12 +1,13 @@
 # GitHub Actions Runner with Claude Code
 
-A production-ready, reusable Docker container for running GitHub Actions workflows locally with Claude Code integration, comprehensive development tools, and agent/skill support.
+A production-ready, reusable Docker container for running GitHub Actions workflows locally with Claude Code integration, comprehensive development tools, DevOps tooling, and agent/skill support.
 
 ## Features
 
 - **Claude Code CLI**: Full integration with agents, skills, and MCP servers
 - **GitHub Actions**: Run workflows locally with [nektos/act](https://github.com/nektos/act)
 - **Development Tools**: Go 1.25.0, Python 3.11, Node.js 20, comprehensive tooling
+- **DevOps Tools**: AWS CLI, Terraform, Kubernetes (kubectl, Helm, k9s), Docker Compose
 - **Security**: Non-root execution, secret management, vulnerability scanning
 - **Extensible**: Easy to customize with your own agents, skills, and tools
 - **Tested**: Automated test suite with comprehensive validation
@@ -42,12 +43,26 @@ act push
 - **Docker**: For running containers within workflows
 - **Git**: Latest version with gh CLI
 
+### DevOps Tools
+
+All DevOps tools are pinned to specific versions for reproducibility:
+
+- **AWS CLI**: 2.15.17 - AWS command line interface
+- **Terraform**: 1.7.3 - Infrastructure as Code
+- **tflint**: 0.50.3 - Terraform linter
+- **kubectl**: 1.29.2 - Kubernetes command-line tool
+- **Helm**: 3.14.2 - Kubernetes package manager
+- **k9s**: 0.32.4 - Kubernetes terminal UI
+- **Docker Compose**: 2.24.6 - Multi-container orchestration
+- **yq**: 4.42.1 - YAML processing
+- **jq**: 1.7.1 - JSON processing
+
+Run `version-check` inside the container to verify all tool versions.
+
 ### Workflow Tools
 
 - **act**: Run GitHub Actions workflows locally
 - **actionlint**: Validate workflow syntax
-- **yq**: YAML processing
-- **jq**: JSON processing
 
 ### Claude Code Integration
 
@@ -105,6 +120,39 @@ act -W .github/workflows/ci.yml
 act -n
 ```
 
+### Using DevOps Tools
+
+Inside the container:
+
+```bash
+# AWS CLI
+aws s3 ls
+aws ec2 describe-instances
+
+# Terraform
+terraform init
+terraform plan
+terraform apply
+
+# Kubernetes
+kubectl get pods
+helm list
+k9s  # Interactive terminal UI
+
+# Docker Compose
+docker-compose up -d
+docker-compose ps
+```
+
+### Checking Tool Versions
+
+```bash
+# Inside container, run the version check script
+version-check
+```
+
+This will display all installed tool versions with color-coded status indicators.
+
 ## Customization
 
 ### Adding Your Agents
@@ -120,16 +168,45 @@ docker run -it --rm \
   axyzlabs/runner:latest
 ```
 
+### Environment Variables
+
+- `GITHUB_TOKEN`: GitHub personal access token for gh CLI
+- `ANTHROPIC_API_KEY`: Anthropic API key for Claude Code
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: AWS credentials
+- `KUBECONFIG`: Kubernetes configuration file path
+
 ## Documentation
 
 - [SETUP_GUIDE.md](SETUP_GUIDE.md) - Detailed setup instructions
 - [DOCKER_SETUP_SUMMARY.md](DOCKER_SETUP_SUMMARY.md) - Technical summary
+- [CLAUDE.md](CLAUDE.md) - Development instructions for contributors
 
 ## Requirements
 
 - **Docker**: 20.10+ with BuildKit support
-- **Disk Space**: ~5GB for image and layers
+- **Disk Space**: ~6GB for image and layers
 - **Memory**: 4GB minimum, 8GB recommended
+- **CPU**: 2+ cores recommended
+
+## Version Compatibility Matrix
+
+| Tool | Version | Compatibility Notes |
+|------|---------|---------------------|
+| AWS CLI | 2.15.17 | Compatible with all AWS services |
+| Terraform | 1.7.3 | HCL 2.0, compatible with AWS/Azure/GCP |
+| kubectl | 1.29.2 | Kubernetes 1.28-1.30 |
+| Helm | 3.14.2 | Chart API v2 |
+| Docker Compose | 2.24.6 | Compose file format 3.8 |
+
+## Upgrading Tools
+
+To upgrade DevOps tools:
+
+1. Update version environment variables in `Dockerfile`
+2. Update expected versions in `scripts/version-check.sh`
+3. Rebuild the image: `./build.sh`
+4. Run tests: `./test-runner.sh`
+5. Update this README with new versions
 
 ## License
 

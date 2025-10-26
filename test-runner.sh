@@ -96,10 +96,29 @@ test_command "golangci-lint installed" "golangci-lint --version"
 test_command "staticcheck installed" "staticcheck -version"
 test_command "goimports installed" "goimports --help"
 
-# Test: Utilities
+# Test: Core utilities
 test_command "jq installed" "jq --version"
 test_command "yq installed" "yq --version"
 test_command "git installed" "git --version"
+
+# Test: DevOps Tools - AWS CLI
+test_command "AWS CLI installed" "aws --version"
+
+# Test: DevOps Tools - Terraform
+test_command "Terraform installed" "terraform version"
+test_command "tflint installed" "tflint --version"
+
+# Test: DevOps Tools - Kubernetes
+test_command "kubectl installed" "kubectl version --client=true"
+test_command "Helm installed" "helm version"
+test_command "k9s installed" "k9s version"
+
+# Test: DevOps Tools - Docker Compose
+test_command "Docker Compose installed" "docker-compose version"
+
+# Test: Version check script
+test_command "version-check script exists" "command -v version-check"
+test_command "version-check script runs" "version-check"
 
 # Test: User and permissions
 test_command "Running as claude user" "[ \$(whoami) = 'claude' ]"
@@ -123,6 +142,12 @@ test_command "Go can build" "cd /home/claude/workspace && go build ./..."
 
 # Test: Workflow validation
 test_command "Can list workflows" "cd /home/claude/workspace && act -l"
+
+# Test: DevOps tool functionality
+test_command "Terraform init works" "cd /tmp && terraform init"
+test_command "AWS CLI help works" "aws help"
+test_command "kubectl help works" "kubectl --help"
+test_command "helm help works" "helm --help"
 
 # Display results
 echo -e "\n${BLUE}[4/4]${NC} Test Results"

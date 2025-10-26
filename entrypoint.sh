@@ -26,8 +26,16 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Verify installations
-log_info "Verifying tool installations..."
+# Run DevOps tools version check
+log_info "Verifying DevOps tool installations..."
+if command -v version-check &> /dev/null; then
+    version-check
+else
+    log_warn "version-check script not found, skipping DevOps tools verification"
+fi
+
+echo ""
+log_info "Verifying core tool installations..."
 
 if command -v claude &> /dev/null; then
     log_info "Claude Code: $(claude --version)"
@@ -73,22 +81,22 @@ WORKSPACE="${WORKSPACE:-${CLAUDE_HOME}/workspace}"
 log_info "Workspace: ${WORKSPACE}"
 
 if [ -d "${WORKSPACE}" ]; then
-    cd "${WORKSPACE}"
+    cd "${WORKSPACE}" || log_warn "Failed to change to workspace directory"
     log_info "Changed directory to workspace"
 else
     log_warn "Workspace directory not found, creating..."
     mkdir -p "${WORKSPACE}"
-    cd "${WORKSPACE}"
+    cd "${WORKSPACE}" || log_warn "Failed to change to workspace directory"
 fi
 
-# Configure Git if not already configured
-if [ -z "$(git config --global user.name)" ]; then
-    git config --global user.name "${GIT_USER_NAME:-Claude Code Runner}"
+# Configure Git if not already configured (handle errors gracefully for worktrees)
+if [ -z "$(git config --global user.name 2>/dev/null || true)" ]; then
+    git config --global user.name "${GIT_USER_NAME:-Claude Code Runner}" 2>/dev/null || log_warn "Failed to set git user.name"
     log_info "Set git user.name"
 fi
 
-if [ -z "$(git config --global user.email)" ]; then
-    git config --global user.email "${GIT_USER_EMAIL:-claude@zeeke-ai.local}"
+if [ -z "$(git config --global user.email 2>/dev/null || true)" ]; then
+    git config --global user.email "${GIT_USER_EMAIL:-claude@zeeke-ai.local}" 2>/dev/null || log_warn "Failed to set git user.email"
     log_info "Set git user.email"
 fi
 
@@ -117,7 +125,7 @@ fi
 # Initialize Go modules if go.mod exists
 if [ -f "${WORKSPACE}/go.mod" ]; then
     log_info "Found go.mod, ensuring dependencies are downloaded..."
-    go mod download
+    go mod download || log_warn "Failed to download Go dependencies"
     log_info "Go dependencies downloaded"
 fi
 
@@ -135,12 +143,12 @@ fi
 
 # Display agent and skill counts
 if [ -d "${CLAUDE_HOME}/.claude/agents" ]; then
-    AGENT_COUNT=$(find "${CLAUDE_HOME}/.claude/agents" -type f -name "*.md" -o -name "*.yml" | wc -l)
+    AGENT_COUNT=$(find "${CLAUDE_HOME}/.claude/agents" -type f \( -name "*.md" -o -name "*.yml" \) 2>/dev/null | wc -l)
     log_info "Loaded ${AGENT_COUNT} agent specifications"
 fi
 
 if [ -d "${CLAUDE_HOME}/.claude/skills" ]; then
-    SKILL_COUNT=$(find "${CLAUDE_HOME}/.claude/skills" -type d -mindepth 1 -maxdepth 1 | wc -l)
+    SKILL_COUNT=$(find "${CLAUDE_HOME}/.claude/skills" -type d -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
     log_info "Loaded ${SKILL_COUNT} skill modules"
 fi
 
@@ -155,7 +163,7 @@ fi
 
 # Check for workflows
 if [ -d "${WORKSPACE}/.github/workflows" ]; then
-    WORKFLOW_COUNT=$(find "${WORKSPACE}/.github/workflows" -type f -name "*.yml" | wc -l)
+    WORKFLOW_COUNT=$(find "${WORKSPACE}/.github/workflows" -type f -name "*.yml" 2>/dev/null | wc -l)
     log_info "Found ${WORKFLOW_COUNT} workflow files"
 fi
 
@@ -166,7 +174,7 @@ if [ "${RUN_PREFLIGHT:-true}" = "true" ]; then
     # Check Go formatting
     if [ -f "${WORKSPACE}/go.mod" ]; then
         log_info "Checking Go code..."
-        if ! gofmt -l . | grep -q .; then
+        if ! gofmt -l . 2>/dev/null | grep -q .; then
             log_info "Go code is properly formatted"
         else
             log_warn "Some Go files need formatting"
