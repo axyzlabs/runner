@@ -55,6 +55,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Additional utilities
     openssh-client \
     rsync \
+    && apt-get remove -y sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install yq separately (not available in apt for this distro)
