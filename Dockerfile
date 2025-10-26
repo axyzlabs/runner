@@ -52,7 +52,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Docker CLI (for act and testing)
     docker.io \
     # Additional utilities
-    sudo \
     openssh-client \
     rsync \
     && rm -rf /var/lib/apt/lists/*
@@ -91,17 +90,28 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     apt-get install -y gh && \
     rm -rf /var/lib/apt/lists/*
 
+# Install Trivy scanner for vulnerability scanning
+ARG TRIVY_VERSION=0.48.3
+RUN wget -qO /tmp/trivy.tar.gz \
+    https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz && \
+    tar xzf /tmp/trivy.tar.gz -C /usr/local/bin/ && \
+    rm /tmp/trivy.tar.gz && \
+    chmod +x /usr/local/bin/trivy
+
 # Install Claude Code CLI via npm (more reliable than install script)
 RUN npm install -g @anthropic-ai/claude-code && \
     claude --version
 
-# Create claude user with sudo access
+# Create claude user WITHOUT sudo access (SECURITY: removed sudo for privilege escalation prevention)
 RUN useradd -m -s /bin/bash -u 1001 ${CLAUDE_USER} && \
-    echo "${CLAUDE_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     mkdir -p ${CLAUDE_HOME}/.claude && \
     mkdir -p ${CLAUDE_HOME}/.config && \
     mkdir -p ${CLAUDE_HOME}/workspace && \
     chown -R ${CLAUDE_USER}:${CLAUDE_USER} ${CLAUDE_HOME}
+
+# SECURITY: Create /go directory with proper permissions for non-root Go operations
+RUN mkdir -p /go/bin /go/pkg && \
+    chown -R ${CLAUDE_USER}:${CLAUDE_USER} /go
 
 # Set up Claude Code for claude user
 USER ${CLAUDE_USER}
@@ -141,16 +151,10 @@ RUN if [ -f "go.mod" ]; then \
         go mod download; \
     fi
 
-# Switch to root to install Go tools (need write access to /go)
-USER root
-
-# Install project-specific Go tools
+# Install project-specific Go tools (now that /go is owned by claude user)
 RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && \
     go install golang.org/x/tools/cmd/goimports@latest && \
     go install honnef.co/go/tools/cmd/staticcheck@latest
-
-# Switch back to claude user
-USER ${CLAUDE_USER}
 
 # Set up Git config
 RUN git config --global user.name "Claude Code Runner" && \

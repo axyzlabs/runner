@@ -34,3 +34,33 @@ temp/
 # Environment
 .env
 .env.local
+
+# SECURITY: Additional secret patterns (but not scripts!)
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+credentials.json
+auth.json
+token.json
+*.token
+.dockercfg
+config.json
+
+# SECURITY: API keys and credentials (but not scripts!)
+*apikey*
+*api_key*
+*api-key*
+.secrets/
+*password*
+*passwd*
+!.secrets.example
+!**/validate-secrets.sh
+!**/security-scan.sh
+!**/test-security.sh

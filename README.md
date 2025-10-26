@@ -1,15 +1,18 @@
 # GitHub Actions Runner with Claude Code
 
-A production-ready, reusable Docker container for running GitHub Actions workflows locally with Claude Code integration, comprehensive development tools, and agent/skill support.
+A production-ready, security-hardened Docker container for running GitHub Actions workflows locally with Claude Code integration, comprehensive development tools, and agent/skill support.
 
 ## Features
 
 - **Claude Code CLI**: Full integration with agents, skills, and MCP servers
 - **GitHub Actions**: Run workflows locally with [nektos/act](https://github.com/nektos/act)
 - **Development Tools**: Go 1.25.0, Python 3.11, Node.js 20, comprehensive tooling
-- **Security**: Non-root execution, secret management, vulnerability scanning
+- **Security Hardened**: Non-root execution, no sudo, PID limits, vulnerability scanning
+- **Trivy Scanner**: Built-in container vulnerability scanning
+- **Resource Protected**: CPU/memory/PID limits to prevent resource exhaustion
+- **Network Isolated**: Inter-container communication disabled for security
 - **Extensible**: Easy to customize with your own agents, skills, and tools
-- **Tested**: Automated test suite with comprehensive validation
+- **Tested**: Automated test suite with comprehensive security validation
 
 ## Quick Start
 
@@ -45,9 +48,14 @@ act push
 ### Workflow Tools
 
 - **act**: Run GitHub Actions workflows locally
-- **actionlint**: Validate workflow syntax
 - **yq**: YAML processing
 - **jq**: JSON processing
+
+### Security Tools
+
+- **Trivy**: Container vulnerability scanner (v0.48.3)
+- **Secret Scanner**: Automated secret pattern detection
+- **Security Tests**: Comprehensive security validation suite
 
 ### Claude Code Integration
 
@@ -55,6 +63,31 @@ act push
 - **Agent Support**: Import user-level and project-level agents
 - **Skill Support**: Import Claude skills
 - **MCP Integration**: Model Context Protocol server support
+
+## Security Features
+
+### Hardening Measures
+
+- **Non-Root Execution**: Runs as `claude` user (UID 1001)
+- **No Sudo Access**: Sudo removed to prevent privilege escalation
+- **PID Limits**: Limited to 512 processes to prevent fork bombs
+- **Resource Limits**: CPU (4 cores) and Memory (8GB) limits enforced
+- **Network Isolation**: Inter-container communication disabled
+- **Read-Only Mounts**: Sensitive volumes mounted read-only
+- **Secret Management**: Automated secret detection and validation
+
+### Security Testing
+
+```bash
+# Run comprehensive security tests
+./scripts/test-security.sh
+
+# Scan for vulnerabilities
+./scripts/security-scan.sh zeeke-ai-runner:latest
+
+# Validate no secrets in repository
+./scripts/validate-secrets.sh
+```
 
 ## Usage
 
@@ -105,6 +138,16 @@ act -W .github/workflows/ci.yml
 act -n
 ```
 
+### Security Scanning
+
+```bash
+# Scan image for vulnerabilities
+docker run --rm zeeke-ai-runner:latest trivy image zeeke-ai-runner:latest
+
+# Or use the provided script
+./scripts/security-scan.sh
+```
+
 ## Customization
 
 ### Adding Your Agents
@@ -120,16 +163,39 @@ docker run -it --rm \
   axyzlabs/runner:latest
 ```
 
+### Secret Management
+
+Create a `.secrets` file for environment-specific secrets:
+
+```bash
+# .secrets file (automatically ignored by git)
+export ANTHROPIC_API_KEY="your-key-here"
+export GITHUB_TOKEN="your-token-here"
+```
+
 ## Documentation
 
 - [SETUP_GUIDE.md](SETUP_GUIDE.md) - Detailed setup instructions
 - [DOCKER_SETUP_SUMMARY.md](DOCKER_SETUP_SUMMARY.md) - Technical summary
+- [SECURITY.md](docs/SECURITY.md) - Security documentation
 
 ## Requirements
 
 - **Docker**: 20.10+ with BuildKit support
 - **Disk Space**: ~5GB for image and layers
 - **Memory**: 4GB minimum, 8GB recommended
+- **CPU**: 2 cores minimum, 4 cores recommended
+
+## Security Compliance
+
+This container follows security best practices:
+
+- **CIS Docker Benchmark**: Aligned with CIS recommendations
+- **Non-Root**: No root execution or sudo access
+- **Least Privilege**: Minimal permissions and capabilities
+- **Resource Limits**: Protection against resource exhaustion
+- **Vulnerability Scanning**: Regular Trivy scans
+- **Secret Management**: Automated secret detection
 
 ## License
 
@@ -139,7 +205,8 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 - **Issues**: [GitHub Issues](https://github.com/axyzlabs/runner/issues)
 - **Documentation**: See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed instructions
+- **Security**: Report security issues privately to security@axyzlabs.com
 
 ---
 
-**Made with ❤️ by axyzlabs**
+**Made with security in mind by axyzlabs**

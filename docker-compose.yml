@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   # GitHub Actions Runner with Claude Code
   gha-runner:
     build:
       context: .
-      dockerfile: Dockerfile.runner
+      dockerfile: Dockerfile
       args:
         - GO_VERSION=1.25.0
         - NODE_VERSION=20
@@ -78,15 +76,17 @@ services:
     stdin_open: true
     tty: true
 
-    # Network
-    network_mode: bridge
+    # Network isolation with custom bridge
+    networks:
+      - runner-network
 
-    # Resource limits (adjust as needed)
+    # SECURITY: Resource limits to prevent resource exhaustion attacks
     deploy:
       resources:
         limits:
           cpus: '4'
           memory: 8G
+          pids: 512
         reservations:
           cpus: '2'
           memory: 4G
@@ -123,6 +123,16 @@ services:
     # Run act by default
     command: act -l
 
+    # Network isolation
+    networks:
+      - runner-network
+
+    # SECURITY: Resource limits including PID limit
+    deploy:
+      resources:
+        limits:
+          pids: 512
+
     profiles:
       - testing
 
@@ -135,7 +145,14 @@ volumes:
   act-cache:
     driver: local
 
-# Networks
+# SECURITY: Network isolation with bridge driver
+# Inter-container communication disabled for enhanced security
 networks:
-  default:
+  runner-network:
     driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.0.0/16
