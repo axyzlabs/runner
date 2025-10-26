@@ -11,6 +11,7 @@
     "maxTokens": 200000
   },
   "metrics": {
-    "enabled": false
+    "enabled": true,
+    "endpoint": "${OTEL_ENDPOINT}"
   }
 }
