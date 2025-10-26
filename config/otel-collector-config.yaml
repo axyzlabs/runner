@@ -1,0 +1,162 @@
+# OpenTelemetry Collector Configuration
+# Version: 0.93.0
+# Purpose: Collect and export metrics for GitHub Actions Runner container
+
+receivers:
+  # Prometheus receiver to scrape metrics
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'runner-metrics'
+          scrape_interval: 15s
+          scrape_timeout: 10s
+          static_configs:
+            - targets: ['localhost:8889']
+              labels:
+                service: 'github-actions-runner'
+                environment: '${ENVIRONMENT:-development}'
+
+  # Host metrics receiver for container resource metrics
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.usage:
+            enabled: true
+          system.memory.utilization:
+            enabled: true
+      disk:
+        metrics:
+          system.disk.io:
+            enabled: true
+          system.disk.operations:
+            enabled: true
+      filesystem:
+        metrics:
+          system.filesystem.usage:
+            enabled: true
+          system.filesystem.utilization:
+            enabled: true
+      network:
+        metrics:
+          system.network.io:
+            enabled: true
+      processes:
+        metrics:
+          system.processes.count:
+            enabled: true
+      process:
+        mute_process_name_error: true
+        metrics:
+          process.cpu.utilization:
+            enabled: true
+          process.memory.usage:
+            enabled: true
+
+processors:
+  # Batch processor to improve performance
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Resource processor to add custom attributes
+  resource:
+    attributes:
+      - key: service.name
+        value: github-actions-runner
+        action: upsert
+      - key: service.version
+        value: ${SERVICE_VERSION:-1.0.0}
+        action: upsert
+      - key: deployment.environment
+        value: ${ENVIRONMENT:-development}
+        action: upsert
+
+  # Filter processor to remove sensitive data
+  filter:
+    error_mode: ignore
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - '.*password.*'
+          - '.*secret.*'
+          - '.*token.*'
+          - '.*key.*'
+
+exporters:
+  # Prometheus exporter - always enabled
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: runner
+    const_labels:
+      runner_type: github_actions
+      claude_enabled: true
+
+  # OTLP exporter - conditionally enabled via OTEL_ENDPOINT
+  otlp:
+    endpoint: ${OTEL_ENDPOINT:-}
+    tls:
+      insecure: ${OTEL_INSECURE:-false}
+      ca_file: ${OTEL_CA_FILE:-}
+      cert_file: ${OTEL_CERT_FILE:-}
+      key_file: ${OTEL_KEY_FILE:-}
+    headers:
+      # Support for common OTLP auth patterns
+      authorization: ${OTEL_AUTH_HEADER:-}
+    compression: gzip
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Logging exporter for debugging (optional)
+  logging:
+    verbosity: ${OTEL_LOG_LEVEL:-normal}
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /health/collector
+
+  # pprof extension for performance profiling (development only)
+  pprof:
+    endpoint: localhost:1777
+
+  # zpages extension for debugging
+  zpages:
+    endpoint: localhost:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+
+  pipelines:
+    metrics:
+      receivers: [prometheus, hostmetrics]
+      processors: [memory_limiter, resource, filter, batch]
+      exporters: [prometheus]
+
+  # Enable telemetry for the collector itself
+  telemetry:
+    logs:
+      level: ${OTEL_LOG_LEVEL:-info}
+      encoding: json
+    metrics:
+      level: basic
+      address: localhost:8888

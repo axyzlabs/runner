@@ -5,11 +5,12 @@ services:
   gha-runner:
     build:
       context: .
-      dockerfile: Dockerfile.runner
+      dockerfile: Dockerfile
       args:
         - GO_VERSION=1.25.0
         - NODE_VERSION=20
         - PYTHON_VERSION=3.11
+        - OTEL_VERSION=0.93.0
     image: zeeke-ai-runner:latest
     container_name: zeeke-ai-runner
 
@@ -47,6 +48,20 @@ services:
       - PYTHONUNBUFFERED=1
       - PIP_NO_CACHE_DIR=1
 
+      # Observability configuration
+      - ENABLE_OTEL=${ENABLE_OTEL:-true}
+      - OTEL_ENDPOINT=${OTEL_ENDPOINT:-}
+      - OTEL_INSECURE=${OTEL_INSECURE:-false}
+      - OTEL_CA_FILE=${OTEL_CA_FILE:-}
+      - OTEL_CERT_FILE=${OTEL_CERT_FILE:-}
+      - OTEL_KEY_FILE=${OTEL_KEY_FILE:-}
+      - OTEL_AUTH_HEADER=${OTEL_AUTH_HEADER:-}
+      - OTEL_LOG_LEVEL=${OTEL_LOG_LEVEL:-info}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - USE_JSON_LOGS=${USE_JSON_LOGS:-true}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - SERVICE_VERSION=${SERVICE_VERSION:-1.0.0}
+
     # Volumes
     volumes:
       # Mount project workspace (read/write)
@@ -67,6 +82,11 @@ services:
 
       # Mount secrets file (read-only)
       - ./.secrets:/home/claude/.secrets:ro
+
+    # Ports
+    ports:
+      # Expose Prometheus metrics endpoint
+      - "8889:8889"
 
     # Working directory
     working_dir: /home/claude/workspace
@@ -94,13 +114,22 @@ services:
     # Restart policy
     restart: unless-stopped
 
-    # Health check
+    # Health check using observability script
     healthcheck:
-      test: ["CMD", "claude", "--version"]
+      test: ["/usr/local/bin/health-check", "ready"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+
+    # Logging configuration with rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service,environment"
+        env: "ENVIRONMENT,SERVICE_VERSION"
 
   # Optional: act runner for workflow testing
   act-runner:
@@ -111,6 +140,8 @@ services:
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ENABLE_OTEL=false  # Disable OTEL for act runner
+      - LOG_LEVEL=INFO
 
     volumes:
       - ./:/home/claude/workspace:rw
@@ -122,6 +153,13 @@ services:
 
     # Run act by default
     command: act -l
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
     profiles:
       - testing

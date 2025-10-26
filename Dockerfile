@@ -23,6 +23,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GO_VERSION=1.25.0 \
     NODE_VERSION=20 \
     PYTHON_VERSION=3.11 \
+    OTEL_VERSION=0.93.0 \
     CLAUDE_USER=claude \
     CLAUDE_HOME=/home/claude \
     RUNNER_ALLOW_RUNASROOT=1
@@ -60,6 +61,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install yq separately (not available in apt for this distro)
 RUN wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && \
     chmod +x /usr/local/bin/yq
+
+# Install OpenTelemetry Collector v0.93.0
+RUN wget -qO /tmp/otelcol.tar.gz \
+    https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol_${OTEL_VERSION}_linux_amd64.tar.gz && \
+    tar -C /tmp -xzf /tmp/otelcol.tar.gz && \
+    mv /tmp/otelcol /usr/local/bin/otelcol && \
+    chmod +x /usr/local/bin/otelcol && \
+    rm /tmp/otelcol.tar.gz
 
 # Install Go
 RUN wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
@@ -101,7 +110,19 @@ RUN useradd -m -s /bin/bash -u 1001 ${CLAUDE_USER} && \
     mkdir -p ${CLAUDE_HOME}/.claude && \
     mkdir -p ${CLAUDE_HOME}/.config && \
     mkdir -p ${CLAUDE_HOME}/workspace && \
+    mkdir -p /etc/otel && \
     chown -R ${CLAUDE_USER}:${CLAUDE_USER} ${CLAUDE_HOME}
+
+# Copy OTEL Collector configuration
+COPY --chown=root:root config/otel-collector-config.yaml /etc/otel/config.yaml
+
+# Copy observability scripts
+COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} scripts/health-check.sh /usr/local/bin/health-check
+COPY --chown=${CLAUDE_USER}:${CLAUDE_USER} scripts/log-wrapper.sh /usr/local/bin/log-wrapper
+
+# Make scripts executable
+RUN chmod +x /usr/local/bin/health-check && \
+    chmod +x /usr/local/bin/log-wrapper
 
 # Set up Claude Code for claude user
 USER ${CLAUDE_USER}
@@ -163,16 +184,20 @@ USER root
 RUN chmod +x /entrypoint.sh
 USER ${CLAUDE_USER}
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD claude --version && go version && python3 --version || exit 1
+# Health check using new health-check script
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD /usr/local/bin/health-check ready || exit 1
 
 # Environment variables for runtime
 ENV PATH="${CLAUDE_HOME}/.local/bin:${GOBIN}:${PATH}" \
-    WORKSPACE="${CLAUDE_HOME}/workspace"
+    WORKSPACE="${CLAUDE_HOME}/workspace" \
+    OTEL_ENDPOINT="" \
+    OTEL_INSECURE="false" \
+    LOG_LEVEL="INFO" \
+    ENABLE_OTEL="true"
 
-# Expose no ports (this is a runner, not a service)
-EXPOSE 0
+# Expose Prometheus metrics port
+EXPOSE 8889
 
 # Set entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
